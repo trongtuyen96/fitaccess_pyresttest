@@ -1,0 +1,187 @@
+---
+- config:
+    - testset: "FitAccess"
+
+    #Config time out
+    - timeout: 600000
+
+    #Generators
+    - generators:
+        #Name in selection
+        - "name": {type: "choice", values: ["John", "Kathy","Jolie", "Tom"]}
+        #Random email
+        - "randomemail": {type: "random_text", character set: "ascii_letters", length: 12 }
+        #Random phone number
+        - "phone": {type: "random_int"}
+        #Randome device token
+        - "dev_token": {type: "random_text", character set: "ascii_letters", length: 64 }
+        #Random pincode
+        - "pincode": {type: "random_text", character set: "digits", length: 4}
+        #Environment variable
+        - "env_pincode": {type: 'env_string', 'string': "$pincode"}
+
+#LOG IN
+- test:
+    - group: "Users"
+    - name: "Login"
+    - url: "/users/login"
+    - method: 'POST'
+    - body: {template: '{"email": "trongtuyen97@gmail.com", "pincode": "1234", "device_token": "b96c3db00cd6fbeed946e4897e97392243c9bbbf01cc940c14b7d64419c21fbc",
+    "device_flatform": 0, "role": 2}'}
+    - headers: {'Content-Type': 'application/json'}
+    - extract_binds:
+      - auth_key: {'jsonpath_mini': "data.user_token"}
+    - validators:
+      - compare: {jsonpath_mini: "data.email", comparator: "eq", expected: "trongtuyen97@gmail.com"}
+
+
+
+#CHANGE PINCODE
+- test:
+    - group: "Users"
+    - name: "Change pincode"
+    - url: "/users/changePincode"
+    - method: 'POST'
+    - body: '{"pincode": "1234"}'
+    - headers: {template: {'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+    - validators:
+      - compare: {jsonpath_mini: "data", comparator: "eq", expected: "Your pincode has been reset"}
+
+#GET IMAGE
+- test:
+    - group: "Users"
+    - name: "Get image"
+    - url: "/users/getImage"
+    - method: 'GET'
+    - headers: {template:{'user-token': "$auth_key"}}
+    - validators:
+      - compare: {raw_body: "", comparator: contains, expected: "web.beesightsoft.com"}
+
+#ME
+- test:
+    - group: "Users"
+    - name: "Get info"
+    - url: "/users/me"
+    - method: 'GET'
+    - headers: {template:{'user-token': "$auth_key"}}
+    - validators:
+      - compare: {jsonpath_mini: "data.email", comparator: "eq", expected: "trongtuyen97@gmail.com"}
+
+#RESET PINCODE
+- test:
+    - group: "Users"
+    - name: "Reset pincode"
+    - url: "/users/resetPincode"
+    - method: 'POST'
+    - body: '{"email": "trongtuyen97@gmail.com"}'
+    - headers: {'Content-Type': 'application/json'}
+    - validators:
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "A reset email has been sent"}
+
+#ADD CONTACT
+#RANDOM NAME, EMAIL, PHONE
+- test:
+    - group: "Trainers"
+    - generator_binds: {remail: randomemail, rname: name, rphone: phone}
+    - name: "Add contact"
+    - url: "/trainers/addContact"
+    - method: 'POST'
+    - body: {template: '{"name": "$rname", "email": "$remail@gmail.com", "phone_number": "$rphone"}'}
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+    - validators:
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Add Contact"}
+
+#AVAILABILITY
+- test:
+    - group: "Trainers"
+    - name: "Availability"
+    - url: "/trainers/availability"
+    - method: 'POST'
+    - body: '{"date": "2017-18-07","time": [{"start_time": "2017-03-07 5:00:00", "end_time": "2017-03-07 6:00:00"}]}'
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+    - validators:
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Succeed"}
+
+#CLIENT REMOVE
+- test:
+    - group: "Trainers"
+    - name: "Client remove"
+    - url: "/trainers/clients/remove"
+    - method: 'POST'
+    - body: '{"client_id": [null]}'
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+    - validators:
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Delete Client Succeed"}
+
+#EXTEND PROFILE
+- test:
+    - group: "Trainers"
+    - name: "Extend profile"
+    - url: "/trainers/extendedProfile"
+    - method: 'POST'
+    - body: '{"name": "fitacces.dev",
+              "phone_number": "+841698025597",
+              "business": "fitaccess.trainer",
+              "birth_date": "1993-02-13",
+              "gender": 0,
+              "avatar": "avatar.png",
+              "about_me": [null],
+              "qualifications": [null],
+              "services": [null],
+              "fees": 10,
+              "service_area": "Ho Chi Minh, VN",
+              "latitude": 10.76,
+              "longitude": 106.6,
+              "radius": 21.56,
+              "north_latitude": 10.76,
+              "north_longitude": 106.6,
+              "south_latitude": 10.76,
+              "south_longitude": 106.6,
+              "stripe_user_id": "ca_AKMHaoSrNw424O51mDf18Ddwc1Xev2kD",
+              "access_token": "ca_AKMHaoSrNw424O51mDf18Ddwc1Xev2kD",
+              "stripe_publishable_key": "ca_AKMHaoSrNw424O51mDf18Ddwc1Xev2kD"}'
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+    - validators:
+#      - assertTrue: {jsonpath_mini: "data.is_extended_profile", test: True}
+#      How to check boolean ??????
+#      - compare: {jsonpath_mini: "data.is_extended_profile", comparator: "type", expected: True}
+#      - assertEqual: {jsonpath_mini: "data.is_extended_profile", comparator: "boolean", expected: "true"}
+      - compare: {jsonpath_mini: "data.is_extended_profile", comparator: "eq", expected: true}
+#      - extract_test: {jsonpath_mini: "data.is_extended_profile", test: "exists"}
+
+#FINANCE
+- test:
+    - group: "Trainers"
+    - name: "Finance"
+    - url: "/trainers/finance?finance_option=0"
+    - method: 'GET'
+    - headers: {template:{'user-token': "$auth_key"}}
+    - validators:
+      - extract_test: {jsonpath_mini: "data.finance", test: "exists"}
+#
+##GET ALL CLIENT
+#- test:
+#    - group: "Trainers"
+#    - name: "Get all clients"
+#    - url: "/trainers/getAllClient"
+#    - method: 'GET'
+#    - headers: {template:{'user-token': "$auth_key"}}
+#    - validators:
+#      - extract_test: {jsonpath-mini: "data.0", test: "exists"}
+
+#LOG OUT
+- test:
+    - group: "Users"
+    - name: "Log out"
+    - url: "/users/logout"
+    - method: 'GET'
+    - headers: {template:{'user-token': "$auth_key"}}
+    - validators:
+      - compare: {jsonpath_mini: "data", comparator: "eq", expected: "Logout Succeed!."}
+
+
+#- test:
+#    - group: "Users"
+#    - name: "Make sure Mr Wayne ISN'T there after we delete him"
+#    - url: "/api/person/10/"
+#    - expected_status: [404]

@@ -2,139 +2,277 @@
 - config:
     - testset: "FitAccess"
 
-    #Config time out
+    # Config time out
     - timeout: 600000
 
-    #Generators
+    # Generators
     - generators:
-        #Name in selection
-        - "name": {type: "choice", values: ["John", "Kathy","Jolie", "Tom"]}
-        #Random email
-        - "randomemail": {type: "random_text", character set: "ascii_letters", length: 12 }
-        #Random phone number
-        - "phone": {type: "random_int"}
-        #Randome device token
-        - "dev_token": {type: "random_text", character set: "ascii_letters", length: 64 }
-#        #Random pincode
-#        - "pincode": {type: "random_text", character set: "digits", length: 4}
-#        #Environment variable
-#        - "env_pincode": {type: 'env_string', 'string': "$pincode"}
+        # Name in selection
+        - "name": {type: "choice", values: ["John", "Kathy", "Jolie", "Tom", "Jack", "Selena"]}
 
-#REGISTER
+        # Random email
+        - "randomemail": {type: "random_text", character_set: "ascii_letters", length: 12 }
+
+        # Random phone number
+        - "phone": {type: "random_int"}
+
+        # Random device token
+        - "dev_token": {type: "random_text", character_set: "ascii_letters", length: 64 }
+
+        # Random pincode
+        - "pincode": {type: "random_text", character_set: "digits", length: 4}
+
+
+# REGISTER
+# CODE 200
 - test:
     - group: "Users"
-    - generator_binds: {rdev_token: dev_token, remail: randomemail}
+    # Only binds one time for all test below
+    - generator_binds: {rdev_token: dev_token, remail: randomemail, rpin: pincode}
+
     - name: "Register"
     - url: "/users/register"
     - method: 'POST'
-    - body: {template: '{"email": "$remail@mailinator.com", "pincode": "1234", "device_token": "$rdev_token",
-    "device_flatform": 0, "role": 2}'}
+
+    - body: {template: '{"email": "$remail@mailinator.com",
+                         "pincode": "$rpin",
+                         "device_token": "$rdev_token",
+                         "device_flatform": 0,
+                         "role": 2}'}
     - headers: {'Content-Type': 'application/json'}
+
     - extract_binds:
       - login_email: {'jsonpath_mini': "data.email"}
+
+    - validators:
+    # Headers are case-insensitive, 'content-type' and 'Content-Type' will be the same
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data.email", comparator: "equals", expected: {template: "$remail@mailinator.com"}}
     - expected_status: [200]
 
-#LOG IN
+
+# REGISTER WITH EXISTED EMAIL
+# CODE 403
 - test:
     - group: "Users"
-    - generator_binds: {rdev_token: dev_token}
+
+    - name: "Register with existed email"
+    - url: "/users/register"
+    - method: 'POST'
+
+    - body: {template: '{"email": "trongtuyen97@gmail.com",
+                         "pincode": "1234",
+                         "device_token": "b96c3db00cd6fbeed946e4897e97392243c9bbbf01cc940c14b7d64419c21fbc",
+                         "device_flatform": 0,
+                         "role": 2}'}
+    - headers: {'Content-Type': 'application/json'}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "errors.0.errorMessage", comparator: "equals", expected: "Email has already been taken"}
+    - expected_status: [403]
+
+
+# LOG IN
+# CODE 200
+- test:
+    - group: "Users"
+
     - name: "Login"
     - url: "/users/login"
     - method: 'POST'
-    - body: {template: '{"email": "$login_email", "pincode": "1234", "device_token": "$rdev_token",
-    "device_flatform": 0, "role": 2}'}
+
+    - body: {template: '{"email": "$login_email",
+                         "pincode": "$rpin",
+                         "device_token": "$rdev_token",
+                         "device_flatform": 0, "role": 2}'}
     - headers: {'Content-Type': 'application/json'}
+
     - extract_binds:
       - auth_key: {'jsonpath_mini': "data.user_token"}
-#    - validators:
-#      - compare: {jsonpath_mini: "data.email", comparator: "eq", expected: "$login_email"}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data.email", comparator: "equals", expected: {template: "$login_email"}}
+      - extract_test: {jsonpath_mini: "data.user_token",  test: "exists"}
     - expected_status: [200]
 
 
-#CHANGE PINCODE
+# LOG IN WITH NON-REISTERED EMAIL
+# CODE 404
 - test:
     - group: "Users"
+
+    - name: "Login with non-registered email"
+    - url: "/users/login"
+    - method: 'POST'
+
+    - body: {template: '{"email": "trongtuyen1000@gmail.com",
+                         "pincode": "1234",
+                         "device_token": "b86c3db00cd6fbeed946e4897e97394243c9bbbf01cc940c14b7d64419c21fbc",
+                         "device_flatform": 0, "role": 2}'}
+    - headers: {'Content-Type': 'application/json'}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "errors.0.errorMessage", comparator: "equals", expected: "Email not exactly"}
+    - expected_status: [404]
+
+
+# CHANGE PINCODE
+# CODE 200
+- test:
+    - group: "Users"
+
     - name: "Change pincode"
     - url: "/users/changePincode"
     - method: 'POST'
-    - body: '{"pincode": "1234"}'
-    - headers: {template: {'Content-Type': 'application/json', 'user-token': "$auth_key"}}
-    - validators:
-      - compare: {jsonpath_mini: "data", comparator: "eq", expected: "Your pincode has been reset"}
 
-#GET IMAGE
+    - body: {template: '{"pincode": "$rpin"}'}
+    - headers: {template: {'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data", comparator: "equals", expected: "Your pincode has been reset"}
+    - expected_status: [200]
+
+
+# CHANGE PINCODE WITH INVALID TOKEN
+# CODE 401
 - test:
     - group: "Users"
+
+    - name: "Change pincode with invalid token"
+    - url: "/users/changePincode"
+    - method: 'POST'
+
+    - body: {template: '{"pincode": "1234"}'}
+    - headers: {template: {'Content-Type': 'application/json', 'user-token': "hCbn8MLDaxXKA4p4ey4NweKKmLqV8go1"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "errors.0.errorMessage", comparator: "equals", expected: "Unauthorized."}
+    - expected_status: [401]
+
+
+# GET IMAGE
+# CODE 200
+- test:
+    - group: "Users"
+
     - name: "Get image"
     - url: "/users/getImage"
     - method: 'GET'
+
     - headers: {template:{'user-token': "$auth_key"}}
+
     - validators:
       - compare: {raw_body: "", comparator: contains, expected: "web.beesightsoft.com"}
+    - expected_status: [200]
 
-#ME
+
+# ME
+# CODE 200
 - test:
     - group: "Users"
+
     - name: "Get info"
     - url: "/users/me"
     - method: 'GET'
+
     - headers: {template:{'user-token': "$auth_key"}}
-#    - validators:
-#      - compare: {jsonpath_mini: "data.email", comparator: "eq", expected: "trongtuyen97@gmail.com"}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data.email", comparator: "equals", expected: {template: "$login_email"}}
     - expected_status: [200]
 
-#RESET PINCODE
+
+# RESET PINCODE
+# CODE 200
 - test:
     - group: "Users"
+
     - name: "Reset pincode"
     - url: "/users/resetPincode"
     - method: 'POST'
-    - body: '{"email": "trongtuyen97@gmail.com"}'
-    - headers: {'Content-Type': 'application/json'}
-    - validators:
-      - compare: {jsonpath_mini: "data", comparator: contains, expected: "A reset email has been sent"}
 
-#ADD CONTACT
-#RANDOM NAME, EMAIL, PHONE
+    - body: {template: '{"email": "$login_email@gmail.com"}'}
+    - headers: {'Content-Type': 'application/json'}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "A reset email has been sent"}
+    - expected_status: [200]
+
+
+# ADD CONTACT
+# RANDOM NAME, EMAIL, PHONE
+# CODE 200
 - test:
     - group: "Trainers"
+
     - generator_binds: {remail: randomemail, rname: name, rphone: phone}
     - name: "Add contact"
     - url: "/trainers/addContact"
     - method: 'POST'
-    - body: {template: '{"name": "$rname", "email": "$remail@gmail.com", "phone_number": "$rphone"}'}
-    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
-    - validators:
-      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Add Contact"}
 
-#AVAILABILITY
+    - body: {template: '{"name": "$rname", "email": "$remail@gmail.com",
+                         "phone_number": "$rphone"}'}
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Add Contact Succeed"}
+    - expected_status: [200]
+
+
+# AVAILABILITY
+# CODE 200
 - test:
     - group: "Trainers"
+
     - name: "Availability"
     - url: "/trainers/availability"
     - method: 'POST'
-    - body: '{"date": "2017-18-07","time": [{"start_time": "2017-03-07 5:00:00", "end_time": "2017-03-07 6:00:00"}]}'
-    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
-    - validators:
-      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Succeed"}
 
-#CLIENT REMOVE
+    - body: '{"date": "2017-18-07","time": [{
+              "start_time": "2017-03-07 5:00:00",
+              "end_time": "2017-03-07 6:00:00"}]}'
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Succeed"}
+    - expected_status: [200]
+
+
+# CLIENT REMOVE
+# CODE 200
 - test:
     - group: "Trainers"
+
     - name: "Client remove"
     - url: "/trainers/clients/remove"
     - method: 'POST'
+
     - body: '{"client_id": [null]}'
     - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
-    - validators:
-      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Delete Client Succeed"}
 
-#EXTEND PROFILE
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Delete Client Succeed"}
+    - expected_status: [200]
+
+# EXTEND PROFILE
+# CODE 200
 - test:
     - group: "Trainers"
+
     - name: "Extend profile"
     - url: "/trainers/extendedProfile"
     - method: 'POST'
+
     - body: '{"name": "fitacces.dev",
               "phone_number": "+841698025597",
               "business": "fitaccess.trainer",
@@ -157,36 +295,81 @@
               "access_token": "ca_AKMHaoSrNw424O51mDf18Ddwc1Xev2kD",
               "stripe_publishable_key": "ca_AKMHaoSrNw424O51mDf18Ddwc1Xev2kD"}'
     - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
-    - validators:
-      - compare: {jsonpath_mini: "data.is_extended_profile", comparator: "eq", expected: true}
 
-#FINANCE
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - extract_test: {jsonpath_mini: "data",  test: "exists"}
+      - compare: {jsonpath_mini: "data.is_extended_profile", comparator: "equals", expected: true}
+    - expected_status: [200]
+
+
+# FINANCE
+# CODE 200
 - test:
     - group: "Trainers"
+
     - name: "Finance"
     - url: "/trainers/finance?finance_option=0"
     - method: 'GET'
-    - headers: {template:{'user-token': "$auth_key"}}
-    - validators:
-      - extract_test: {jsonpath_mini: "data.finance", test: "exists"}
-#
-##GET ALL CLIENT
-#- test:
-#    - group: "Trainers"
-#    - name: "Get all clients"
-#    - url: "/trainers/getAllClient"
-#    - method: 'GET'
-#    - headers: {template:{'user-token': "$auth_key"}}
-#    - validators:
-#      - extract_test: {jsonpath-mini: "data.0", test: "exists"}
 
-#LOG OUT
+    - headers: {template:{'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - extract_test: {jsonpath_mini: "data.finance", test: "exists"}
+    - expected_status: [200]
+
+
+# GET ALL CLIENT
+# CODE 200
+- test:
+    - group: "Trainers"
+
+    - name: "Get all clients"
+    - url: "/trainers/getAllClient"
+    - method: 'GET'
+
+    - headers: {template:{'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+#      - extract_test: {jsonpath_mini: 'data.0', test: "exists"}
+      - compare: {jsonpath_mini: 'data', comparator: "count_eq", expected: 189}
+    - expected_status: [200]
+
+
+
+# ADD DEVICE
+# CODE 200
+- test:
+    - group: "Notification"
+
+    - name: "Add device"
+    - url: "/notification/addDevice"
+    - method: 'POST'
+
+    - body: {template: '{"device_token": "$rdev_token",
+              "mobile_flatform": 1 }'}
+    - headers: {template:{'Content-Type': 'application/json', 'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - extract_test: {jsonpath_mini: "data.id", test: "exists"}
+    - expected_status: [200]
+
+
+# LOG OUT
+# CODE 200
 - test:
     - group: "Users"
+
     - name: "Log out"
     - url: "/users/logout"
     - method: 'GET'
-    - headers: {template:{'user-token': "$auth_key"}}
-    - validators:
-      - compare: {jsonpath_mini: "data", comparator: "eq", expected: "Logout Succeed!."}
 
+    - headers: {template:{'user-token': "$auth_key"}}
+
+    - validators:
+      - compare: {header: 'Content-Type', comparator: "str_eq", expected: "application/json"}
+      - compare: {jsonpath_mini: "data", comparator: contains, expected: "Logout Succeed"}
+    - expected_status: [200]
